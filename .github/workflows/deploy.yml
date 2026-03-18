@@ -36,7 +36,7 @@ jobs:
             echo "All services restarted successfully"
 
       - name: Wait for startup
-        run: sleep 45
+        run: sleep 90
 
       - name: Health check — order-service
         run: |
