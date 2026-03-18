@@ -31,56 +31,39 @@ jobs:
       - name: Build notification-service
         run: cd notification-service && mvn package -DskipTests --no-transfer-progress
 
-      - name: Configure SSH — create directory
+      - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-
-      - name: Configure SSH — write key
-        run: |
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          head -1 ~/.ssh/deploy_key
-
-      - name: Configure SSH — scan host
-        run: |
-          echo "Connecting to host: ${{ secrets.EC2_HOST }}"
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-          echo "Known hosts entries: $(wc -l < ~/.ssh/known_hosts)"
+          ssh-keyscan -T 60 -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>&1 || true
+          echo "StrictHostKeyChecking no" > ~/.ssh/config
+          echo "ServerAliveInterval 60" >> ~/.ssh/config
+          echo "ServerAliveCountMax 10" >> ~/.ssh/config
+          echo "ConnectTimeout 120" >> ~/.ssh/config
 
       - name: Deploy order-service JAR
         run: |
           scp -i ~/.ssh/deploy_key \
-            -o ServerAliveInterval=60 \
-            -o ConnectTimeout=120 \
-            -o StrictHostKeyChecking=no \
             order-service/target/order-service-0.0.1-SNAPSHOT.jar \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/opt/streambite/order/app.jar
 
       - name: Deploy inventory-service JAR
         run: |
           scp -i ~/.ssh/deploy_key \
-            -o ServerAliveInterval=60 \
-            -o ConnectTimeout=120 \
-            -o StrictHostKeyChecking=no \
             inventory-service/target/inventory-service-0.0.1-SNAPSHOT.jar \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/opt/streambite/inventory/app.jar
 
       - name: Deploy notification-service JAR
         run: |
           scp -i ~/.ssh/deploy_key \
-            -o ServerAliveInterval=60 \
-            -o ConnectTimeout=120 \
-            -o StrictHostKeyChecking=no \
             notification-service/target/notification-service-0.0.1-SNAPSHOT.jar \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/opt/streambite/notification/app.jar
 
       - name: Restart services on EC2
         run: |
           ssh -i ~/.ssh/deploy_key \
-            -o ServerAliveInterval=60 \
-            -o ConnectTimeout=30 \
-            -o StrictHostKeyChecking=no \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
             "sudo systemctl daemon-reload && \
              sudo systemctl restart order-service inventory-service notification-service"
