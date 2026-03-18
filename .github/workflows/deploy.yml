@@ -9,11 +9,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ── Step 1: Check out source code ──────────────────────────────
       - name: Checkout code
         uses: actions/checkout@v4.2.2
 
-      # ── Step 2: Set up Java 17 ──────────────────────────────────────
       - name: Set up Java 17
         uses: actions/setup-java@v4.7.0
         with:
@@ -21,11 +19,9 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      # ── Step 3: Build shared-events first ──────────────────────────
       - name: Install shared-events
         run: cd shared-events && mvn install -DskipTests --no-transfer-progress
 
-      # ── Step 4: Build all 3 Spring Boot JARs ───────────────────────
       - name: Build order-service
         run: cd order-service && mvn package -DskipTests --no-transfer-progress
 
@@ -35,7 +31,6 @@ jobs:
       - name: Build notification-service
         run: cd notification-service && mvn package -DskipTests --no-transfer-progress
 
-      # ── Step 5: Configure SSH ───────────────────────────────────────
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
@@ -44,37 +39,46 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      # ── Step 6: Copy Spring Boot JARs to EC2 ───────────────────────
       - name: Deploy order-service JAR
         run: |
           scp -i ~/.ssh/deploy_key \
+            -o ServerAliveInterval=60 \
+            -o ConnectTimeout=120 \
+            -o StrictHostKeyChecking=no \
             order-service/target/order-service-0.0.1-SNAPSHOT.jar \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/opt/streambite/order/app.jar
 
       - name: Deploy inventory-service JAR
         run: |
           scp -i ~/.ssh/deploy_key \
+            -o ServerAliveInterval=60 \
+            -o ConnectTimeout=120 \
+            -o StrictHostKeyChecking=no \
             inventory-service/target/inventory-service-0.0.1-SNAPSHOT.jar \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/opt/streambite/inventory/app.jar
 
       - name: Deploy notification-service JAR
         run: |
           scp -i ~/.ssh/deploy_key \
+            -o ServerAliveInterval=60 \
+            -o ConnectTimeout=120 \
+            -o StrictHostKeyChecking=no \
             notification-service/target/notification-service-0.0.1-SNAPSHOT.jar \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/opt/streambite/notification/app.jar
 
-      # ── Step 7: Restart all 3 services on EC2 ──────────────────────
       - name: Restart services on EC2
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-          "sudo systemctl daemon-reload && \
-           sudo systemctl restart order-service inventory-service notification-service"
+          ssh -i ~/.ssh/deploy_key \
+            -o ServerAliveInterval=60 \
+            -o ConnectTimeout=30 \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            "sudo systemctl daemon-reload && \
+             sudo systemctl restart order-service inventory-service notification-service"
 
-      # ── Step 8: Wait for JVM startup ───────────────────────────────
       - name: Wait for startup
         run: sleep 45
 
-      # ── Step 9: Verify all 3 health endpoints ──────────────────────
       - name: Health check — order-service
         run: |
           curl --fail --silent \
@@ -93,7 +97,6 @@ jobs:
             http://${{ secrets.EC2_HOST }}:8082/actuator/health | grep -q UP
           echo "notification-service is UP"
 
-      # ── Step 10: Summary ───────────────────────────────────────────
       - name: Deployment complete
         run: |
           echo "All 3 services deployed and verified healthy"
