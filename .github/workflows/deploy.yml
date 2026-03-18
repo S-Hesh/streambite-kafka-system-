@@ -31,61 +31,80 @@ jobs:
       - name: Build notification-service
         run: cd notification-service && mvn package -DskipTests --no-transfer-progress
 
-      - name: Configure SSH
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -T 60 -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>&1 || true
-          echo "StrictHostKeyChecking no" > ~/.ssh/config
-          echo "ServerAliveInterval 60" >> ~/.ssh/config
-          echo "ServerAliveCountMax 10" >> ~/.ssh/config
-          echo "ConnectTimeout 120" >> ~/.ssh/config
-
+      # ── Deploy order-service JAR ──────────────────────────────────
       - name: Deploy order-service JAR
-        run: |
-          scp -i ~/.ssh/deploy_key \
-            order-service/target/order-service-0.0.1-SNAPSHOT.jar \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/opt/streambite/order/app.jar
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "order-service/target/order-service-0.0.1-SNAPSHOT.jar"
+          target: "/opt/streambite/order/"
+          strip_components: 3
+          timeout: 120s
+          command_timeout: 10m
 
+      # ── Deploy inventory-service JAR ──────────────────────────────
       - name: Deploy inventory-service JAR
-        run: |
-          scp -i ~/.ssh/deploy_key \
-            inventory-service/target/inventory-service-0.0.1-SNAPSHOT.jar \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/opt/streambite/inventory/app.jar
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "inventory-service/target/inventory-service-0.0.1-SNAPSHOT.jar"
+          target: "/opt/streambite/inventory/"
+          strip_components: 3
+          timeout: 120s
+          command_timeout: 10m
 
+      # ── Deploy notification-service JAR ───────────────────────────
       - name: Deploy notification-service JAR
-        run: |
-          scp -i ~/.ssh/deploy_key \
-            notification-service/target/notification-service-0.0.1-SNAPSHOT.jar \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/opt/streambite/notification/app.jar
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "notification-service/target/notification-service-0.0.1-SNAPSHOT.jar"
+          target: "/opt/streambite/notification/"
+          strip_components: 3
+          timeout: 120s
+          command_timeout: 10m
 
-      - name: Restart services on EC2
-        run: |
-          ssh -i ~/.ssh/deploy_key \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-            "sudo systemctl daemon-reload && \
-             sudo systemctl restart order-service inventory-service notification-service"
+      # ── Rename JARs to app.jar and restart services ───────────────
+      - name: Rename JARs and restart services
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 60s
+          command_timeout: 30s
+          script: |
+            mv /opt/streambite/order/order-service-0.0.1-SNAPSHOT.jar /opt/streambite/order/app.jar
+            mv /opt/streambite/inventory/inventory-service-0.0.1-SNAPSHOT.jar /opt/streambite/inventory/app.jar
+            mv /opt/streambite/notification/notification-service-0.0.1-SNAPSHOT.jar /opt/streambite/notification/app.jar
+            sudo systemctl daemon-reload
+            sudo systemctl restart order-service inventory-service notification-service
 
       - name: Wait for startup
         run: sleep 45
 
+      # ── Health checks ─────────────────────────────────────────────
       - name: Health check — order-service
         run: |
-          curl --fail --silent \
+          curl --fail --silent --max-time 10 \
             http://${{ secrets.EC2_HOST }}:8080/actuator/health | grep -q UP
           echo "order-service is UP"
 
       - name: Health check — inventory-service
         run: |
-          curl --fail --silent \
+          curl --fail --silent --max-time 10 \
             http://${{ secrets.EC2_HOST }}:8081/actuator/health | grep -q UP
           echo "inventory-service is UP"
 
       - name: Health check — notification-service
         run: |
-          curl --fail --silent \
+          curl --fail --silent --max-time 10 \
             http://${{ secrets.EC2_HOST }}:8082/actuator/health | grep -q UP
           echo "notification-service is UP"
 
