@@ -29,6 +29,12 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- Embedded Tomcat — required for actuator HTTP on port 8082 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
         <!-- Spring Boot core + SLF4J logging -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
