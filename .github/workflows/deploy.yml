@@ -31,13 +31,22 @@ jobs:
       - name: Build notification-service
         run: cd notification-service && mvn package -DskipTests --no-transfer-progress
 
-      - name: Configure SSH
+      - name: Configure SSH — create directory
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
+
+      - name: Configure SSH — write key
+        run: |
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          head -1 ~/.ssh/deploy_key
+
+      - name: Configure SSH — scan host
+        run: |
+          echo "Connecting to host: ${{ secrets.EC2_HOST }}"
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          echo "Known hosts entries: $(wc -l < ~/.ssh/known_hosts)"
 
       - name: Deploy order-service JAR
         run: |
