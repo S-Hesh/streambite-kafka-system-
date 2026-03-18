@@ -1,0 +1,7 @@
+# Inventory keeps H2 in-memory for stock DB in all environments.
+# Only the Kafka bootstrap server changes between local and prod.
+
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS}
+

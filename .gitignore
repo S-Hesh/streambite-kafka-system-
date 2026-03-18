@@ -1,0 +1,20 @@
+# Compiled output — never commit
+target/
+*.jar
+*.class
+
+# IDE files
+.idea/
+*.iml
+
+# SSH keys — NEVER commit
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
